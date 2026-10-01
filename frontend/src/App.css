@@ -1,15 +1,21 @@
-#root {
-  min-height: 100vh;
-}
-
 * {
   box-sizing: border-box;
 }
 
+#root {
+  min-height: 100vh;
+}
+
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
+
   background: #0f1117;
   color: #f5f7fa;
 }
@@ -18,10 +24,20 @@ button {
   font-family: inherit;
 }
 
+
+/* =========================
+   APP
+========================= */
+
 .app {
   min-height: 100vh;
   background: #0f1117;
 }
+
+
+/* =========================
+   HEADER
+========================= */
 
 .header {
   display: flex;
@@ -31,21 +47,31 @@ button {
   padding: 28px 40px;
 
   border-bottom: 1px solid #252936;
+
   background: #151820;
 }
 
 .header h1 {
   margin: 0;
+
   font-size: 28px;
   font-weight: 700;
+
   letter-spacing: -0.5px;
 }
 
 .header p {
   margin: 6px 0 0;
+
   color: #9298a6;
+
   font-size: 14px;
 }
+
+
+/* =========================
+   STATUS
+========================= */
 
 .status {
   display: flex;
@@ -58,6 +84,7 @@ button {
   border-radius: 999px;
 
   color: #b7bdc9;
+
   font-size: 13px;
 }
 
@@ -66,19 +93,34 @@ button {
   height: 8px;
 
   border-radius: 50%;
+
   background: #42d392;
 }
 
+
+/* =========================
+   MAIN CONTENT
+========================= */
+
 .main-content {
   width: min(1100px, calc(100% - 48px));
+
   margin: 0 auto;
+
   padding: 40px 0 60px;
 }
 
+
+/* =========================
+   PROJECT CARD
+========================= */
+
 .project-card {
   display: flex;
+
   align-items: center;
   justify-content: space-between;
+
   gap: 30px;
 
   padding: 30px;
@@ -87,17 +129,6 @@ button {
   border-radius: 16px;
 
   background: #171a22;
-}
-
-.label {
-  display: block;
-
-  margin-bottom: 8px;
-
-  color: #7f8796;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
 }
 
 .project-info h2 {
@@ -113,9 +144,35 @@ button {
   margin: 10px 0 0;
 
   color: #9298a6;
+
   font-size: 14px;
+
   line-height: 1.6;
 }
+
+
+/* =========================
+   LABEL
+========================= */
+
+.label {
+  display: block;
+
+  margin-bottom: 8px;
+
+  color: #7f8796;
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  letter-spacing: 1px;
+}
+
+
+/* =========================
+   SCAN BUTTON
+========================= */
 
 .scan-button {
   flex-shrink: 0;
@@ -123,12 +180,15 @@ button {
   padding: 12px 20px;
 
   border: none;
+
   border-radius: 9px;
 
   background: #f5f7fa;
+
   color: #101218;
 
   font-size: 14px;
+
   font-weight: 600;
 
   cursor: pointer;
@@ -140,17 +200,36 @@ button {
 
 .scan-button:hover {
   opacity: 0.9;
+
   transform: translateY(-1px);
 }
+
+.scan-button:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.6;
+}
+
+
+/* =========================
+   SECTION
+========================= */
 
 .health-section,
 .issues-section {
   margin-top: 32px;
 }
 
+
+/* =========================
+   SECTION HEADER
+========================= */
+
 .section-header {
   display: flex;
+
   align-items: flex-end;
+
   justify-content: space-between;
 
   margin-bottom: 16px;
@@ -160,32 +239,55 @@ button {
   margin: 0;
 
   font-size: 20px;
+
   font-weight: 600;
 }
+
+
+/* =========================
+   ISSUE COUNT
+========================= */
 
 .issue-count {
   padding: 6px 10px;
 
   border: 1px solid #292e3a;
+
   border-radius: 7px;
 
   color: #9298a6;
+
   font-size: 12px;
 }
 
+
+/* =========================
+   HEALTH GRID
+========================= */
+
 .health-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
   gap: 16px;
 }
 
+
+/* =========================
+   HEALTH CARD
+========================= */
+
 .health-card {
   display: flex;
+
   flex-direction: column;
 
   padding: 24px;
 
   border: 1px solid #292e3a;
+
   border-radius: 12px;
 
   background: #151820;
@@ -193,6 +295,7 @@ button {
 
 .health-number {
   font-size: 30px;
+
   font-weight: 700;
 }
 
@@ -200,13 +303,22 @@ button {
   margin-top: 5px;
 
   color: #9298a6;
+
   font-size: 13px;
 }
 
+
+/* =========================
+   EMPTY STATE
+========================= */
+
 .empty-state {
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   justify-content: center;
 
   min-height: 260px;
@@ -214,6 +326,7 @@ button {
   padding: 40px;
 
   border: 1px dashed #303542;
+
   border-radius: 14px;
 
   background: #13161d;
@@ -223,7 +336,9 @@ button {
 
 .empty-icon {
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   width: 42px;
@@ -234,9 +349,11 @@ button {
   border-radius: 50%;
 
   background: #1d2824;
+
   color: #42d392;
 
   font-size: 20px;
+
   font-weight: 700;
 }
 
@@ -252,22 +369,123 @@ button {
   margin: 8px 0 0;
 
   color: #7f8796;
+
   font-size: 13px;
+
   line-height: 1.5;
 }
 
+
+/* =========================
+   ISSUES LIST
+========================= */
+
+.issues-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 12px;
+}
+
+
+/* =========================
+   ISSUE CARD
+========================= */
+
+.issue-card {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 16px;
+
+  padding: 20px;
+
+  border: 1px solid #292e3a;
+
+  border-radius: 12px;
+
+  background: #151820;
+}
+
+.issue-card.error {
+  border-left: 3px solid #ff5f56;
+}
+
+.issue-card.warning {
+  border-left: 3px solid #f5b942;
+}
+
+
+/* =========================
+   ISSUE ICON
+========================= */
+
+.issue-icon {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  width: 32px;
+  height: 32px;
+
+  border-radius: 50%;
+
+  background: #252936;
+
+  font-size: 14px;
+
+  font-weight: 700;
+}
+
+
+/* =========================
+   ISSUE TEXT
+========================= */
+
+.issue-card h3 {
+  margin: 0;
+
+  font-size: 15px;
+
+  font-weight: 600;
+}
+
+.issue-card p {
+  margin: 6px 0 0;
+
+  color: #9298a6;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
 @media (max-width: 700px) {
+
   .header {
     padding: 22px;
   }
 
   .main-content {
     width: min(100% - 32px, 1100px);
+
     padding-top: 25px;
   }
 
   .project-card {
     flex-direction: column;
+
     align-items: flex-start;
   }
 
@@ -278,4 +496,5 @@ button {
   .health-grid {
     grid-template-columns: 1fr;
   }
+
 }
