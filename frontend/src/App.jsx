@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './App.css';
 import { runScan, getHostInfo, revealIssue } from './lib/ae';
+import { saveScan, exportReport } from './lib/api';
 
 function App() {
   const [isScanning, setIsScanning] = useState(false);
@@ -10,6 +11,9 @@ function App() {
   const [scanDuration, setScanDuration] = useState(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [revealErrors, setRevealErrors] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedScanId, setSavedScanId] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const hostInfo = getHostInfo();
 
   const [scanData, setScanData] = useState({
@@ -49,6 +53,9 @@ function App() {
     setIsScanning(true);
     setScanError(null);
     setRevealErrors({});
+    setSavedScanId(null);
+    setSaveError(null);
+    setIsSaving(false);
     const startTime = performance.now();
 
     try {
@@ -81,6 +88,39 @@ function App() {
     } finally {
       setScanDuration(Math.round(performance.now() - startTime));
       setIsScanning(false);
+    }
+  };
+
+  const handleSaveReport = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        projectName: scanData.projectName || 'Untitled Project',
+        compCount: scanData.compCount || 0,
+        layerCount: scanData.layerCount || 0,
+        footageCount: scanData.footageCount || 0,
+        passedCount: scanData.passedCount || 0,
+        issues: scanData.issues || [],
+        scanDurationMs: scanDuration || undefined,
+      };
+
+      const res = await saveScan(payload);
+      if (res && res.ok && res.data?.id) {
+        setSavedScanId(res.data.id);
+      } else {
+        setSaveError(res?.error || 'Backend offline. Start it with uvicorn to save reports.');
+      }
+    } catch {
+      setSaveError('Backend offline. Start it with uvicorn to save reports.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleExportReport = (format) => {
+    if (savedScanId) {
+      exportReport(savedScanId, format);
     }
   };
 
@@ -171,12 +211,53 @@ function App() {
               </h2>
             </div>
 
+            <div className="health-header-right">
+              <span className="issue-count">
+                {scanComplete
+                  ? `${issues.length} Issue${issues.length === 1 ? '' : 's'}`
+                  : '0 Issues'}
+              </span>
 
-            <span className="issue-count">
-              {scanComplete
-                ? `${issues.length} Issue${issues.length === 1 ? '' : 's'}`
-                : '0 Issues'}
-            </span>
+              {scanComplete && (
+                <div className="report-actions">
+                  {!savedScanId && !saveError && (
+                    <button
+                      type="button"
+                      className="save-report-button"
+                      onClick={handleSaveReport}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? 'Saving...' : 'Save report'}
+                    </button>
+                  )}
+
+                  {savedScanId && (
+                    <div className="export-links">
+                      <span className="saved-badge">Saved</span>
+                      <button
+                        type="button"
+                        className="export-link-button"
+                        onClick={() => handleExportReport('html')}
+                      >
+                        Export HTML
+                      </button>
+                      <span className="divider">•</span>
+                      <button
+                        type="button"
+                        className="export-link-button"
+                        onClick={() => handleExportReport('json')}
+                      >
+                        Export JSON
+                      </button>
+                    </div>
+                  )}
+
+                  {saveError && (
+                    <p className="backend-offline-notice">{saveError}</p>
+                  )}
+                </div>
+              )}
+            </div>
 
           </div>
 

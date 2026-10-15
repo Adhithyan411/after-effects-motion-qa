@@ -100,6 +100,36 @@ Click each issue card (or focus it and press `Enter` / `Space`) to confirm the s
 
 ---
 
+### Test 5: Backend Integration & Report Export Workflow
+1. **Start the FastAPI backend**:
+   ```bash
+   cd backend
+   uvicorn app.main:app --port 8000
+   ```
+2. **Open `/docs`**:
+   - Open your web browser to `http://localhost:8000/docs`.
+   - Verify the interactive Swagger documentation loads and displays all endpoints (`/health`, `/scans`, `/scans/{id}`, `/scans/{id}/compare/{other_id}`, `/scans/{id}/report`).
+3. **Save a scan from the panel**:
+   - In After Effects (or browser dev mode), click **Scan Project**.
+   - After the scan completes, observe the small **Save report** button near the Project Health section.
+   - Click **Save report**.
+   - **Expected Result**: The button updates to show `Saved` alongside `Export HTML` and `Export JSON` action buttons.
+4. **Export HTML and JSON reports**:
+   - Click **Export HTML**:
+     - Inside After Effects, this invokes `CSInterface.openURLInDefaultBrowser` (or `window.cep.util.openURLInDefaultBrowser`), opening the print-friendly, formatted HTML report in your default system browser.
+     - In browser mode, opens a new tab displaying the report with project KPI cards and issues grouped by severity.
+   - Click **Export JSON**:
+     - Triggers browser download of `motionqa-<project>-<date>.json` containing the raw saved scan payload.
+5. **Stop the backend**:
+   - Return to the terminal running `uvicorn` and stop the server (`Ctrl + C`).
+6. **Confirm offline degradation while scanning still works**:
+   - Return to Motion QA and click **Scan Project**.
+   - **Expected Result**: The project scans successfully, counters update, and issues are listed. Scanning is **not** blocked by the offline backend.
+   - Click **Save report**.
+   - **Expected Result**: An inline notice appears: `Backend offline. Start it with uvicorn to save reports.` Filter tabs and click-to-select continue working normally.
+
+---
+
 ## 🚨 Troubleshooting
 
 | Symptom | Cause | Solution |

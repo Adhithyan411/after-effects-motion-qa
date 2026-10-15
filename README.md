@@ -9,20 +9,26 @@
 - **Panel Frontend (`/frontend`)**: React 19, Vite, Vanilla CSS. Features real-time counters, severity filters (All, Errors, Warnings), and clean dark-mode UI.
 - **CEP Bridge (`/ae`)**: Adobe Common Extensibility Platform (CEP 11, Host: `AEFT`) panel manifest and configuration (`CSXS/manifest.xml`, `.debug`).
 - **ExtendScript Scanner (`/ae/jsx/scan.jsx`)**: ES3-compatible After Effects scripting engine that inspects compositions, layers, properties, and project footage items.
-- **Backend API (`/backend`)**: FastAPI service reserved for cloud validation, rulesets, and automated report generation.
+- **Backend API (`/backend`)**: FastAPI + SQLite service for persistent scan storage, comparison/diffing, and multi-format report exports (HTML, JSON, CSV).
 
 ---
 
 ## 🔍 QA Rules Checked
 
-| Rule | Severity | Description |
+| Rule ID | Severity | Description |
 |---|---|---|
-| **Default / Unnamed Layers** | `Warning` | Flags unrenamed layers matching patterns like `Shape Layer 1`, `Solid 1`, `Null 1`, `Text 1`. |
-| **Unused Footage Items** | `Warning` | Identifies imported footage or assets in the Project panel not used in any comp. |
-| **Missing / Offline Footage** | `Error` | Catches missing files or unlinked media (`footageMissing == true`). |
-| **Layer OutPoint Overflow** | `Warning` | Identifies layers whose `outPoint` extends past the composition's total duration. |
-| **Inconsistent Frame Rates** | `Warning` | Detects compositions with mismatched frame rates compared to the main composition. |
-| **Expression Errors** | `Error` | Inspects layer properties for broken expressions reporting runtime errors. |
+| `expression-error` | `Error` | Inspects layer properties for broken expressions reporting runtime errors. |
+| `missing-footage` | `Error` | Catches missing files or unlinked media (`footageMissing == true`). |
+| `unnamed-layer` | `Warning` | Flags unrenamed layers matching patterns like `Shape Layer 1`, `Solid 1`, `Null 1`, `Text 1`. |
+| `unused-footage` | `Warning` | Identifies imported footage or assets in the Project panel not used in any comp. |
+| `layer-extends-comp` | `Warning` | Identifies layers whose `outPoint` extends past the composition's total duration. |
+| `inconsistent-framerate` | `Warning` | Detects compositions with mismatched frame rates compared to the main composition. |
+| `missing-font` | `Warning` | Detects text layers referencing uninstalled or substituted fonts. |
+| `heavy-effect` | `Warning` | Flags render-heavy effects (Gaussian Blur, Glow, Fast Box Blur > 50px, Particles, Time Displacement). |
+| `precomp-organization` | `Warning` | Flags comps nested > 4 levels deep and default-named compositions like `Comp 1` or `Pre-comp 1`. |
+| `duplicate-footage` | `Warning` | Identifies footage items pointing to the same file path on disk. |
+| `disabled-layer` | `Warning` | Flags hidden/disabled layers not marked as guide layers. |
+| `oversized-footage` | `Warning` | Flags footage items with dimensions over 2x the width/height of the composition using them. |
 
 ---
 
@@ -126,6 +132,64 @@ Remote debugging is configured on port `8088` via `/ae/.debug`.
 
 ---
 
+## 🐍 Backend Setup & Run (FastAPI)
+
+> **Note on Standalone Operation:** The Motion QA CEP panel operates completely offline inside After Effects. The backend service is optional and only used for saving scan records, comparing historical runs, and exporting HTML/JSON/CSV reports. If the backend is not running, project scanning, severity filtering, and click-to-select remain 100% operational.
+
+The backend provides persistent SQLite storage for scans, history listing, comparative diffing across scans, and print-friendly report exports in HTML, JSON, and CSV.
+
+### 1. Environment Setup
+
+```bash
+cd backend
+
+# Create virtual environment (if not already created)
+python -m venv .venv
+
+# Activate virtual environment
+# Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# Windows Command Prompt:
+.\.venv\Scripts\activate.bat
+# macOS / Linux:
+source .venv/bin/activate
+
+# Install runtime dependencies
+pip install -r requirements.txt
+
+# Or install all dependencies including testing tools (pytest, httpx):
+pip install -r requirements-dev.txt
+```
+
+### 2. Run the Development Server
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+- API Base: `http://localhost:8000`
+- Interactive Swagger Documentation: `http://localhost:8000/docs`
+- Database: SQLite standard library file automatically created at `backend/data/motionqa.db`.
+
+### 3. API Endpoints Table
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Health check returning `{"status": "ok"}`. |
+| `POST` | `/scans` | Validates and stores a `ScanResult`. Returns `SavedScanSummary` with auto-assigned `id`. |
+| `GET` | `/scans` | Lists saved scans newest first. Supports optional query parameters: `?project=<name>` and `?limit=<int>`. |
+| `GET` | `/scans/{id}` | Retrieves the complete saved scan including all issues and metadata, or `404`. |
+| `DELETE` | `/scans/{id}` | Deletes a saved scan record, or returns `404`. |
+| `GET` | `/scans/{id}/compare/{other_id}` | Compares two scans and returns `added`, `resolved`, and `retained` issues matched by `rule + compName + layerName`, plus `errorDelta` and `warningDelta`. |
+| `GET` | `/scans/{id}/report?format=html\|json\|csv` | Exports a formatted report (`html` print-ready page, `json` raw scan, or `csv` spreadsheet). Sets `Content-Disposition` attachment with filename `motionqa-<project>-<date>.<ext>`. |
+
+### 4. Running Backend Tests
+
+```bash
+pytest backend/tests -v
+```
+
+---
+
 ## 📁 Repository Structure
 
 ```text
@@ -137,27 +201,43 @@ after-effects-motion-qa/
 │   │   └── manifest.xml          # CEP 11 manifest (MainPath: ./panel/index.html)
 │   ├── jsx/
 │   │   ├── json2.js              # Douglas Crockford's ES3 JSON polyfill
-│   │   └── scan.jsx              # ExtendScript project & layer QA scanner
+│   │   ├── make-test-project.jsx # Extended test project generator
+│   │   └── scan.jsx              # ExtendScript project & layer QA scanner + reveal bridge
 │   ├── lib/
 │   │   └── CSInterface.js        # Official Adobe CSInterface library (v11.0.0)
 │   └── panel/                    # Built frontend assets loaded by CEP
 ├── backend/                      # FastAPI Backend
-│   └── app/
-│       ├── __init__.py
-│       └── main.py               # API entrypoint
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── db.py                 # SQLite database helper & CRUD operations
+│   │   ├── main.py               # FastAPI application, routes, and CORS
+│   │   ├── models.py             # Pydantic schemas (Issue, ScanResult, SavedScan)
+│   │   └── reports.py            # HTML, JSON, and CSV report export builders
+│   ├── data/                     # Local SQLite database (motionqa.db, gitignored)
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   └── test_api.py           # Pytest test suite for all endpoints
+│   ├── requirements.txt          # Production dependencies (fastapi, uvicorn, pydantic)
+│   └── requirements-dev.txt      # Development dependencies (pytest, httpx)
 ├── frontend/                     # React 19 + Vite Application
 │   ├── dist/                     # Vite production build output
 │   ├── scripts/
 │   │   └── copy-to-panel.mjs     # Deploys dist/ to ae/panel/
 │   ├── src/
 │   │   ├── lib/
-│   │   │   └── ae.js             # CEP bridge & browser dev fallback helper
+│   │   │   ├── ae.js             # CEP bridge & browser dev fallback helper
+│   │   │   └── api.js            # Graceful backend API client (saveScan, exportReport)
 │   │   ├── App.css               # Dark mode styling for panel
-│   │   ├── App.jsx               # QA dashboard UI, filters & counters
+│   │   ├── App.jsx               # QA dashboard UI, filters, counters & report actions
 │   │   └── main.jsx              # React root
 │   ├── index.html                # Panel HTML entrypoint ("Motion QA")
 │   ├── package.json
 │   └── vite.config.js            # Vite config (base: './')
+├── docs/
+│   └── TESTING.md                # Full QA verification & testing guide
+├── scripts/
+│   ├── install-panel.ps1         # Windows automated installer & registry setup
+│   └── uninstall-panel.ps1       # Windows uninstaller script
 ├── .gitignore                    # Ignored artifacts & dependencies
 └── README.md                     # Documentation & setup guide
 ```

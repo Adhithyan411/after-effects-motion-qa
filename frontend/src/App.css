@@ -210,6 +210,94 @@ button {
   opacity: 0.6;
 }
 
+.project-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.health-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.save-report-button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #2d3342;
+  color: #cfd6e4;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.save-report-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #4a5568;
+  color: #ffffff;
+}
+
+.save-report-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.saved-badge {
+  color: #42d392;
+  font-weight: 600;
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.export-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #60a5fa;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.export-link-button:hover {
+  color: #93c5fd;
+}
+
+.export-links .divider {
+  color: #4a5568;
+  font-size: 10px;
+}
+
+.backend-offline-notice {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
+  line-height: 1.4;
+  max-width: 250px;
+}
+
 
 /* =========================
    SECTION

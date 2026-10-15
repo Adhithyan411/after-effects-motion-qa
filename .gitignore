@@ -8,7 +8,10 @@ ae/panel/
 
 # Python & Environment
 .venv/
+.venv
+backend/data/
 __pycache__/
+__pycache__
 *.pyc
 .env
 *.env
