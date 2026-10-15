@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:panel": "vite build && node scripts/copy-to-panel.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
