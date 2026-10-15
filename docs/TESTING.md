@@ -49,22 +49,28 @@ If Adobe After Effects was open during installation, close and relaunch it so it
 | `layer-extends-comp` | Layer outPoint extends beyond comp | **Warning** | `Overflow Background` in `Main Comp` | **1** |
 | `inconsistent-framerate` | Inconsistent frame rate | **Warning** | `Secondary Comp` (30 fps vs 24 fps) | **1** |
 | `unused-footage` | Unused footage detected | **Warning** | `Unused Solid Asset` in Project Panel | **1** |
+| `precomp-organization` | Default composition name (`Comp 1`) | **Warning** | `Comp 1` in Project Panel | **1** |
+| `disabled-layer` | Disabled layer not marked as guide | **Warning** | `Hidden Old Layout` in `Main Comp` | **1** |
+| `heavy-effect` | Heavy effect: Gaussian Blur | **Warning** | `Heavy FX Layer` in `Main Comp` | **1** |
+| `heavy-effect` | Heavy effect: Glow | **Warning** | `Heavy FX Layer` in `Main Comp` | **1** |
+| `oversized-footage` | Oversized footage layer | **Warning** | `Oversized Texture` in `Main Comp` | **1** |
+| `duplicate-footage` | Duplicate footage item | **Warning** | `Texture Asset Duplicate.bmp` in Project Panel | **1** |
 
 #### Expected Health Counters:
 - **Errors**: `1`
-- **Warnings**: `5`
-- **Total Issues**: `6 Issues`
-- **Passed**: `> 0` (e.g., properly named `Logo` layer, frame rate baseline, non-missing footage)
+- **Warnings**: `11`
+- **Total Issues**: `12 Issues`
+- **Passed**: `> 0` (e.g., properly named `Logo` layer, frame rate baseline, installed fonts, non-missing footage)
 
 ---
 
 ### Test 3: Severity Filter Verification
 1. After scanning the test project, observe the filter buttons above the issues list:
-   - **All (6)**: Shows all 6 issue cards (1 red border error + 5 yellow border warnings).
+   - **All (12)**: Shows all 12 issue cards (1 red border error + 11 yellow border warnings).
 2. Click **Errors (1)**:
    - Only the red border card for `Expression Test Layer` is visible.
-3. Click **Warnings (5)**:
-   - Only the 5 yellow border warning cards are visible.
+3. Click **Warnings (11)**:
+   - Only the 11 yellow border warning cards are visible.
 4. Verify clicking between tabs is instant and preserves the health card totals above.
 
 ---
@@ -80,6 +86,12 @@ Click each issue card (or focus it and press `Enter` / `Space`) to confirm the s
 | **Layer outPoint extends beyond comp** (`Overflow Background`) | Opens **Main Comp** in the viewer, deselects all other layers, and selects **Overflow Background**. |
 | **Inconsistent frame rate** (`Secondary Comp`) | Deselects other items in Project panel, selects **Secondary Comp**, and opens it in the viewer. |
 | **Unused footage detected** (`Unused Solid Asset`) | Deselects other items in Project panel and selects **Unused Solid Asset** in the Project panel. |
+| **Default composition name** (`Comp 1`) | Deselects other items in Project panel, selects **Comp 1**, and opens it in the viewer. |
+| **Disabled layer not marked as guide** (`Hidden Old Layout`) | Opens **Main Comp** in the viewer, deselects all other layers, and selects **Hidden Old Layout**. |
+| **Heavy effect: Gaussian Blur** (`Heavy FX Layer`) | Opens **Main Comp** in the viewer, deselects all other layers, and selects **Heavy FX Layer**. |
+| **Heavy effect: Glow** (`Heavy FX Layer`) | Opens **Main Comp** in the viewer, deselects all other layers, and selects **Heavy FX Layer**. |
+| **Oversized footage layer** (`Oversized Texture`) | Opens **Main Comp** in the viewer and selects **Oversized Texture** in the Project panel. |
+| **Duplicate footage item** (`Texture Asset Duplicate.bmp`) | Deselects other items in Project panel and selects **Texture Asset Duplicate.bmp** in the Project panel. |
 
 #### Deleted Item Error Handling:
 1. Delete the layer `Solid 1` directly from `Main Comp` in After Effects (without clicking "Scan Project").
