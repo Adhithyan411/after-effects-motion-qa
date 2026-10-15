@@ -115,6 +115,56 @@ function scanPropertiesForExpressionErrors(group, compName, layerName, compId, l
 }
 
 /**
+ * Computes the maximum upward nesting depth for a composition.
+ */
+function getCompUpwardNestingDepth(comp, visited) {
+    if (!comp || !comp.usedIn || comp.usedIn.length === 0) {
+        return 0;
+    }
+    if (!visited) visited = {};
+    if (visited[comp.id]) return 0;
+    visited[comp.id] = true;
+
+    var maxDepth = 0;
+    for (var u = 0; u < comp.usedIn.length; u++) {
+        var parentComp = comp.usedIn[u];
+        if (parentComp && parentComp instanceof CompItem && parentComp.id !== comp.id) {
+            var depth = 1 + getCompUpwardNestingDepth(parentComp, visited);
+            if (depth > maxDepth) {
+                maxDepth = depth;
+            }
+        }
+    }
+    delete visited[comp.id];
+    return maxDepth;
+}
+
+/**
+ * Computes the maximum downward nesting depth for a composition.
+ */
+function getCompDownwardNestingDepth(comp, visited) {
+    if (!comp || !comp.numLayers) return 0;
+    if (!visited) visited = {};
+    if (visited[comp.id]) return 0;
+    visited[comp.id] = true;
+
+    var maxSubDepth = 0;
+    for (var l = 1; l <= comp.numLayers; l++) {
+        try {
+            var layer = comp.layer(l);
+            if (layer && layer.source && layer.source instanceof CompItem && layer.source.id !== comp.id) {
+                var subDepth = 1 + getCompDownwardNestingDepth(layer.source, visited);
+                if (subDepth > maxSubDepth) {
+                    maxSubDepth = subDepth;
+                }
+            }
+        } catch (eLayer) {}
+    }
+    delete visited[comp.id];
+    return maxSubDepth;
+}
+
+/**
  * Main project scanning function.
  * Returns a JSON string matching the Motion QA schema.
  */
@@ -145,6 +195,10 @@ function scanProject() {
 
         var firstComp = null;
         var defaultLayerRegex = /^((Shape Layer|Solid|Null|Text|Camera|Light|Adjustment Layer)\s*\d+|.*Solid\s*\d+)$/i;
+        var defaultCompRegex = /^((Comp|Pre-comp|Precomp)\s*\d+)$/i;
+
+        // Map to track duplicate file paths across footage items
+        var footageByFilePath = {};
 
         // Iterate through all project items
         var numItems = proj.numItems || proj.items.length;
@@ -152,59 +206,131 @@ function scanProject() {
             var item = proj.item(i);
             if (!item) continue;
 
-            // --- 1. Footage Item Checks ---
+            // ================================================================
+            // 1. FOOTAGE ITEM CHECKS
+            // ================================================================
             if (item instanceof FootageItem) {
                 footageCount++;
 
                 // Rule c: Missing / offline footage
-                if (item.footageMissing) {
-                    issues.push({
-                        id: "issue-footage-missing-" + (issues.length + 1),
-                        severity: "error",
-                        rule: "missing-footage",
-                        title: "Missing footage detected",
-                        description: "Footage file '" + item.name + "' is offline or cannot be found on disk.",
-                        compName: "",
-                        layerName: item.name,
-                        itemId: item.id
-                    });
-                } else {
-                    passedCount++;
-                }
+                try {
+                    if (item.footageMissing) {
+                        issues.push({
+                            id: "issue-footage-missing-" + (issues.length + 1),
+                            severity: "error",
+                            rule: "missing-footage",
+                            title: "Missing footage detected",
+                            description: "Footage file '" + item.name + "' is offline or cannot be found on disk.",
+                            compName: "",
+                            layerName: item.name,
+                            itemId: item.id
+                        });
+                    } else {
+                        passedCount++;
+                    }
+                } catch (eMissing) {}
 
                 // Rule b: Unused footage items
-                if (item.usedIn && item.usedIn.length === 0) {
-                    issues.push({
-                        id: "issue-footage-unused-" + (issues.length + 1),
-                        severity: "warning",
-                        rule: "unused-footage",
-                        title: "Unused footage detected",
-                        description: "Footage item '" + item.name + "' is imported but not used in any composition.",
-                        compName: "",
-                        layerName: item.name,
-                        itemId: item.id
-                    });
-                } else {
-                    passedCount++;
-                }
+                try {
+                    if (item.usedIn && item.usedIn.length === 0) {
+                        issues.push({
+                            id: "issue-footage-unused-" + (issues.length + 1),
+                            severity: "warning",
+                            rule: "unused-footage",
+                            title: "Unused footage detected",
+                            description: "Footage item '" + item.name + "' is imported but not used in any composition.",
+                            compName: "",
+                            layerName: item.name,
+                            itemId: item.id
+                        });
+                    } else {
+                        passedCount++;
+                    }
+                } catch (eUnused) {}
+
+                // Rule 4 (New): Track file paths for Duplicate Footage check
+                try {
+                    if (item.file) {
+                        var fPath = item.file.fsName || item.file.fullName || item.file.absoluteURI;
+                        if (fPath) {
+                            var normalizedPath = fPath.toLowerCase();
+                            if (!footageByFilePath[normalizedPath]) {
+                                footageByFilePath[normalizedPath] = [];
+                            }
+                            footageByFilePath[normalizedPath].push(item);
+                        }
+                    }
+                } catch (ePath) {}
+
+                // Rule 6 (New): Oversized footage items
+                try {
+                    if (item.width > 0 && item.usedIn && item.usedIn.length > 0) {
+                        var isOversized = false;
+                        for (var u = 0; u < item.usedIn.length; u++) {
+                            var targetComp = item.usedIn[u];
+                            if (targetComp && targetComp instanceof CompItem) {
+                                if (item.width > (targetComp.width * 2) || item.height > (targetComp.height * 2)) {
+                                    isOversized = true;
+                                    issues.push({
+                                        id: "issue-oversized-" + (issues.length + 1),
+                                        severity: "warning",
+                                        rule: "oversized-footage",
+                                        title: "Oversized footage asset",
+                                        description: "Footage '" + item.name + "' (" + item.width + "x" + item.height + ") is more than 2x larger than comp '" + targetComp.name + "' (" + targetComp.width + "x" + targetComp.height + ").",
+                                        compName: targetComp.name,
+                                        layerName: item.name,
+                                        itemId: item.id,
+                                        compId: targetComp.id
+                                    });
+                                }
+                            }
+                        }
+                        if (!isOversized) {
+                            passedCount++;
+                        }
+                    }
+                } catch (eOver) {}
             }
 
-            // --- 2. Comp Item Checks ---
+            // ================================================================
+            // 2. COMPOSITION CHECKS
+            // ================================================================
             if (item instanceof CompItem) {
                 compCount++;
 
                 // Rule e: Comps with inconsistent frame rate vs the first/main comp
-                if (firstComp === null) {
-                    firstComp = item;
-                    passedCount++; // First comp establishes baseline
-                } else {
-                    if (Math.abs(item.frameRate - firstComp.frameRate) > 0.01) {
+                try {
+                    if (firstComp === null) {
+                        firstComp = item;
+                        passedCount++; // First comp establishes baseline
+                    } else {
+                        if (Math.abs(item.frameRate - firstComp.frameRate) > 0.01) {
+                            issues.push({
+                                id: "issue-framerate-" + (issues.length + 1),
+                                severity: "warning",
+                                rule: "inconsistent-framerate",
+                                title: "Inconsistent frame rate",
+                                description: "Composition '" + item.name + "' (" + item.frameRate + " fps) differs from '" + firstComp.name + "' (" + firstComp.frameRate + " fps).",
+                                compName: item.name,
+                                layerName: "",
+                                compId: item.id,
+                                itemId: item.id
+                            });
+                        } else {
+                            passedCount++;
+                        }
+                    }
+                } catch (eFps) {}
+
+                // Rule 3 (New): Precomp organization - Default comp name ("Comp 1", "Pre-comp 1")
+                try {
+                    if (defaultCompRegex.test(item.name)) {
                         issues.push({
-                            id: "issue-framerate-" + (issues.length + 1),
+                            id: "issue-comp-name-" + (issues.length + 1),
                             severity: "warning",
-                            rule: "inconsistent-framerate",
-                            title: "Inconsistent frame rate",
-                            description: "Composition '" + item.name + "' (" + item.frameRate + " fps) differs from '" + firstComp.name + "' (" + firstComp.frameRate + " fps).",
+                            rule: "precomp-organization",
+                            title: "Default composition name",
+                            description: "Composition '" + item.name + "' appears to use an unrenamed default name.",
                             compName: item.name,
                             layerName: "",
                             compId: item.id,
@@ -213,9 +339,34 @@ function scanProject() {
                     } else {
                         passedCount++;
                     }
-                }
+                } catch (eCompName) {}
 
-                // Check layers inside this composition
+                // Rule 3 (New): Precomp organization - Nested more than 4 levels deep
+                try {
+                    var upDepth = getCompUpwardNestingDepth(item, {});
+                    var downDepth = getCompDownwardNestingDepth(item, {});
+                    var totalNesting = Math.max(upDepth, downDepth);
+
+                    if (totalNesting > 4) {
+                        issues.push({
+                            id: "issue-comp-depth-" + (issues.length + 1),
+                            severity: "warning",
+                            rule: "precomp-organization",
+                            title: "Deeply nested composition",
+                            description: "Composition '" + item.name + "' is nested " + totalNesting + " levels deep (exceeds recommended max of 4).",
+                            compName: item.name,
+                            layerName: "",
+                            compId: item.id,
+                            itemId: item.id
+                        });
+                    } else {
+                        passedCount++;
+                    }
+                } catch (eDepth) {}
+
+                // ============================================================
+                // 3. LAYER CHECKS INSIDE COMPOSITION
+                // ============================================================
                 var numLayers = item.numLayers;
                 for (var l = 1; l <= numLayers; l++) {
                     layerCount++;
@@ -227,55 +378,221 @@ function scanProject() {
                     var layerId = (typeof layer.id !== "undefined" && layer.id !== null) ? layer.id : layer.index;
 
                     // Rule a: Default / unnamed layers
-                    if (defaultLayerRegex.test(layer.name)) {
-                        issues.push({
-                            id: "issue-layer-name-" + (issues.length + 1),
-                            severity: "warning",
-                            rule: "unnamed-layer",
-                            title: "Unnamed layer detected",
-                            description: "Layer '" + layer.name + "' in comp '" + item.name + "' appears to use an unrenamed default name.",
-                            compName: item.name,
-                            layerName: layer.name,
-                            compId: compId,
-                            layerIndex: layerIndex,
-                            layerId: layerId
-                        });
-                    } else {
-                        passedCount++;
-                    }
+                    try {
+                        if (defaultLayerRegex.test(layer.name)) {
+                            issues.push({
+                                id: "issue-layer-name-" + (issues.length + 1),
+                                severity: "warning",
+                                rule: "unnamed-layer",
+                                title: "Unnamed layer detected",
+                                description: "Layer '" + layer.name + "' in comp '" + item.name + "' appears to use an unrenamed default name.",
+                                compName: item.name,
+                                layerName: layer.name,
+                                compId: compId,
+                                layerIndex: layerIndex,
+                                layerId: layerId
+                            });
+                        } else {
+                            passedCount++;
+                        }
+                    } catch (eLayerName) {}
 
                     // Rule d: Layers whose outPoint extends beyond comp duration
-                    var compDuration = item.duration;
-                    var layerOut = layer.outPoint;
-                    if (layerOut > compDuration + 0.005) {
-                        var outSec = Math.round(layerOut * 100) / 100;
-                        var durSec = Math.round(compDuration * 100) / 100;
-                        issues.push({
-                            id: "issue-layer-outpoint-" + (issues.length + 1),
-                            severity: "warning",
-                            rule: "layer-extends-comp",
-                            title: "Layer outPoint extends beyond comp",
-                            description: "Layer '" + layer.name + "' extends past composition duration (out: " + outSec + "s, comp: " + durSec + "s).",
-                            compName: item.name,
-                            layerName: layer.name,
-                            compId: compId,
-                            layerIndex: layerIndex,
-                            layerId: layerId
-                        });
-                    } else {
-                        passedCount++;
-                    }
+                    try {
+                        var compDuration = item.duration;
+                        var layerOut = layer.outPoint;
+                        if (layerOut > compDuration + 0.005) {
+                            var outSec = Math.round(layerOut * 100) / 100;
+                            var durSec = Math.round(compDuration * 100) / 100;
+                            issues.push({
+                                id: "issue-layer-outpoint-" + (issues.length + 1),
+                                severity: "warning",
+                                rule: "layer-extends-comp",
+                                title: "Layer outPoint extends beyond comp",
+                                description: "Layer '" + layer.name + "' extends past composition duration (out: " + outSec + "s, comp: " + durSec + "s).",
+                                compName: item.name,
+                                layerName: layer.name,
+                                compId: compId,
+                                layerIndex: layerIndex,
+                                layerId: layerId
+                            });
+                        } else {
+                            passedCount++;
+                        }
+                    } catch (eOutPoint) {}
+
+                    // Rule 5 (New): Disabled-but-present layers (switched off, not guide layer)
+                    try {
+                        if (!layer.enabled && !layer.guideLayer) {
+                            issues.push({
+                                id: "issue-disabled-layer-" + (issues.length + 1),
+                                severity: "warning",
+                                rule: "disabled-layer",
+                                title: "Disabled layer present",
+                                description: "Layer '" + layer.name + "' is disabled (hidden) and not marked as a guide layer.",
+                                compName: item.name,
+                                layerName: layer.name,
+                                compId: compId,
+                                layerIndex: layerIndex,
+                                layerId: layerId
+                            });
+                        } else {
+                            passedCount++;
+                        }
+                    } catch (eDisabled) {}
+
+                    // Rule 2 (New): Heavy effects (Gaussian Blur, Glow, Fast Box Blur > 50, etc.)
+                    try {
+                        var fxGroup = layer.property("ADBE Effect Parade") || layer.property("Effects");
+                        var foundHeavy = false;
+                        if (fxGroup && fxGroup.numProperties) {
+                            for (var ef = 1; ef <= fxGroup.numProperties; ef++) {
+                                var eff = fxGroup.property(ef);
+                                if (!eff) continue;
+                                var efName = eff.name || "";
+                                var efMatch = eff.matchName || "";
+                                var isHeavy = false;
+                                var heavyName = "";
+
+                                if (/Gaussian Blur/i.test(efName) || /Gaussian/i.test(efMatch)) {
+                                    isHeavy = true;
+                                    heavyName = "Gaussian Blur";
+                                } else if (/Directional Blur/i.test(efName) || /Directional/i.test(efMatch)) {
+                                    isHeavy = true;
+                                    heavyName = "Directional Blur";
+                                } else if (/Glow/i.test(efName) || /Glo2/i.test(efMatch)) {
+                                    isHeavy = true;
+                                    heavyName = "Glow";
+                                } else if (/Motion Tile/i.test(efName) || /Motion2/i.test(efMatch)) {
+                                    isHeavy = true;
+                                    heavyName = "Motion Tile";
+                                } else if (/Time Displacement/i.test(efName) || /Time Displacement/i.test(efMatch)) {
+                                    isHeavy = true;
+                                    heavyName = "Time Displacement";
+                                } else if (/Particle/i.test(efName) || /Particle/i.test(efMatch)) {
+                                    isHeavy = true;
+                                    heavyName = efName;
+                                } else if (/Fast Box Blur|Box Blur/i.test(efName) || /Box Blur/i.test(efMatch)) {
+                                    var blurRadius = null;
+                                    try {
+                                        var rProp = eff.property("Blur Radius") || eff.property("Radius") || eff.property(1);
+                                        if (rProp && typeof rProp.value === "number") {
+                                            blurRadius = rProp.value;
+                                        }
+                                    } catch (eR) {}
+                                    if (blurRadius === null || blurRadius > 50) {
+                                        isHeavy = true;
+                                        heavyName = "Fast Box Blur" + (blurRadius !== null ? " (Radius: " + Math.round(blurRadius) + ")" : "");
+                                    }
+                                }
+
+                                if (isHeavy) {
+                                    foundHeavy = true;
+                                    issues.push({
+                                        id: "issue-heavy-effect-" + (issues.length + 1),
+                                        severity: "warning",
+                                        rule: "heavy-effect",
+                                        title: "Performance heavy effect",
+                                        description: "Layer '" + layer.name + "' uses known render-heavy effect: " + heavyName + ".",
+                                        compName: item.name,
+                                        layerName: layer.name,
+                                        compId: compId,
+                                        layerIndex: layerIndex,
+                                        layerId: layerId
+                                    });
+                                }
+                            }
+                        }
+                        if (!foundHeavy) {
+                            passedCount++;
+                        }
+                    } catch (eFx) {}
+
+                    // Rule 1 (New): Missing or substituted fonts
+                    try {
+                        var textProps = layer.property("ADBE Text Properties") || layer.property("Text");
+                        var srcTextProp = textProps ? (textProps.property("ADBE Text Document") || textProps.property("Source Text")) : layer.property("Source Text");
+                        if (srcTextProp) {
+                            var textDoc = srcTextProp.value;
+                            if (textDoc) {
+                                var fontName = textDoc.font || "";
+                                var isMissingFont = false;
+
+                                // Modern AE font verification API (AE 24.0+)
+                                if (app.fonts && app.fonts.missingOrSubstitutedFonts && app.fonts.missingOrSubstitutedFonts.length > 0) {
+                                    var missingList = app.fonts.missingOrSubstitutedFonts;
+                                    for (var mf = 0; mf < missingList.length; mf++) {
+                                        var fontObj = missingList[mf];
+                                        if (fontObj && (fontObj.postScriptName === fontName || fontObj.fullName === fontName || fontObj.family === fontName)) {
+                                            isMissingFont = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                // Traditional AE bracket check for substituted/missing fonts
+                                if (!isMissingFont && fontName && (fontName.indexOf("[") === 0 || /^\[.*\]$/.test(fontName))) {
+                                    isMissingFont = true;
+                                }
+
+                                if (isMissingFont) {
+                                    issues.push({
+                                        id: "issue-font-missing-" + (issues.length + 1),
+                                        severity: "warning",
+                                        rule: "missing-font",
+                                        title: "Missing or substituted font",
+                                        description: "Text layer '" + layer.name + "' uses missing or substituted font: " + fontName + ".",
+                                        compName: item.name,
+                                        layerName: layer.name,
+                                        compId: compId,
+                                        layerIndex: layerIndex,
+                                        layerId: layerId
+                                    });
+                                } else {
+                                    passedCount++;
+                                }
+                            }
+                        }
+                    } catch (eFont) {}
 
                     // Rule f: Expressions with errors
-                    var issuesBeforeExpr = issues.length;
-                    var exprsChecked = scanPropertiesForExpressionErrors(layer, item.name, layer.name, compId, layerIndex, layerId, issues, 6);
-                    var exprIssuesFound = issues.length - issuesBeforeExpr;
-                    if (exprsChecked > exprIssuesFound) {
-                        passedCount += (exprsChecked - exprIssuesFound);
-                    }
+                    try {
+                        var issuesBeforeExpr = issues.length;
+                        var exprsChecked = scanPropertiesForExpressionErrors(layer, item.name, layer.name, compId, layerIndex, layerId, issues, 6);
+                        var exprIssuesFound = issues.length - issuesBeforeExpr;
+                        if (exprsChecked > exprIssuesFound) {
+                            passedCount += (exprsChecked - exprIssuesFound);
+                        }
+                    } catch (eExprs) {}
                 }
             }
         }
+
+        // Rule 4 (New): Process duplicate footage paths
+        try {
+            for (var pKey in footageByFilePath) {
+                if (footageByFilePath.hasOwnProperty(pKey)) {
+                    var itemsList = footageByFilePath[pKey];
+                    if (itemsList && itemsList.length > 1) {
+                        for (var d = 1; d < itemsList.length; d++) {
+                            var dupFootage = itemsList[d];
+                            issues.push({
+                                id: "issue-duplicate-footage-" + (issues.length + 1),
+                                severity: "warning",
+                                rule: "duplicate-footage",
+                                title: "Duplicate footage item",
+                                description: "Footage item '" + dupFootage.name + "' references the same file path as '" + itemsList[0].name + "'.",
+                                compName: "",
+                                layerName: dupFootage.name,
+                                itemId: dupFootage.id
+                            });
+                        }
+                    } else if (itemsList && itemsList.length === 1) {
+                        passedCount++;
+                    }
+                }
+            }
+        } catch (eDupCheck) {}
 
         var result = {
             projectName: projectName,
@@ -358,8 +675,16 @@ function revealIssue(jsonString) {
             return JSON.stringify({ ok: false, error: "Invalid parameter provided to revealIssue." });
         }
 
-        // Case 1: Layer issue (has compId and (layerId or layerIndex or layerName))
-        var isLayerIssue = issue.compId && (typeof issue.layerId !== "undefined" || typeof issue.layerIndex !== "undefined" || (issue.layerName && issue.rule !== "unused-footage" && issue.rule !== "missing-footage" && issue.rule !== "inconsistent-framerate"));
+        // Case 1: Layer issue (unnamed layer, outpoint, expression error, disabled layer, heavy effect, missing font)
+        var isLayerIssue = issue.compId && (
+            issue.rule === "unnamed-layer" ||
+            issue.rule === "layer-extends-comp" ||
+            issue.rule === "expression-error" ||
+            issue.rule === "disabled-layer" ||
+            issue.rule === "heavy-effect" ||
+            issue.rule === "missing-font" ||
+            (typeof issue.layerId !== "undefined" && issue.rule !== "inconsistent-framerate" && issue.rule !== "precomp-organization" && issue.rule !== "oversized-footage")
+        );
 
         if (isLayerIssue) {
             var comp = findCompByIdOrName(issue.compId, issue.compName);
@@ -423,8 +748,8 @@ function revealIssue(jsonString) {
             return JSON.stringify({ ok: true });
         }
 
-        // Case 2: Project-level footage issue (unused or missing footage)
-        if (issue.rule === "unused-footage" || issue.rule === "missing-footage") {
+        // Case 2: Project-level footage issue (unused, missing, or duplicate footage)
+        if (issue.rule === "unused-footage" || issue.rule === "missing-footage" || issue.rule === "duplicate-footage") {
             var targetItem = findProjectItem(issue.itemId, issue.layerName);
             if (!targetItem) {
                 return JSON.stringify({
@@ -445,8 +770,32 @@ function revealIssue(jsonString) {
             return JSON.stringify({ ok: true });
         }
 
-        // Case 3: Comp-level issue (e.g. inconsistent-framerate)
-        if (issue.rule === "inconsistent-framerate" || (issue.compId && !issue.layerName)) {
+        // Case 3: Oversized footage issue (open comp and select footage in Project panel)
+        if (issue.rule === "oversized-footage") {
+            if (issue.compId) {
+                var overComp = findCompByIdOrName(issue.compId, issue.compName);
+                if (overComp) {
+                    overComp.openInViewer();
+                }
+            }
+            if (issue.itemId) {
+                var overItem = findProjectItem(issue.itemId, issue.layerName);
+                if (overItem) {
+                    var totalP = app.project.numItems || app.project.items.length;
+                    for (var pi = 1; pi <= totalP; pi++) {
+                        try {
+                            app.project.item(pi).selected = false;
+                        } catch (eO) {}
+                    }
+                    overItem.selected = true;
+                    return JSON.stringify({ ok: true });
+                }
+            }
+            return JSON.stringify({ ok: true });
+        }
+
+        // Case 4: Comp-level issue (inconsistent-framerate or precomp-organization)
+        if (issue.rule === "inconsistent-framerate" || issue.rule === "precomp-organization" || (issue.compId && !issue.layerName)) {
             var targetComp = findCompByIdOrName(issue.compId, issue.compName);
             if (!targetComp) {
                 return JSON.stringify({
