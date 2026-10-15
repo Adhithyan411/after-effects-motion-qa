@@ -1,4 +1,29 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+dist-ssr/
+ae/panel/
+
+# Python & Environment
+.venv/
 __pycache__/
 *.pyc
 .env
-.venv/
+*.env
+
+# Logs & Debugging
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.zip
+
+*.zip
